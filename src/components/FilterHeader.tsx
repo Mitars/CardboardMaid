@@ -167,7 +167,7 @@ export function FilterHeader({
                   options={playerOptions}
                 />
                 <span className="text-muted-foreground">with</span>
-                <div className="flex items-center gap-1">
+                <span className="flex items-center gap-1">
                   <Select value={getCategoryValue()} onValueChange={handleCategoryChange}>
                     <SelectTrigger className="inline-flex w-auto h-auto px-2 py-0.5 border-0 bg-secondary rounded-full shadow-none text-primary font-medium text-base hover:bg-secondary/80 transition-colors focus:ring-0 focus:ring-offset-0 gap-1 [&>svg]:w-3.5 [&>svg]:h-3.5 [&>svg]:opacity-70">
                       <SelectValue />
@@ -192,7 +192,7 @@ export function FilterHeader({
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
-                </div>
+                </span>
                 <span className="text-muted-foreground">I prefer games that are</span>
                 <InlineSelect
                   value={sortBy}

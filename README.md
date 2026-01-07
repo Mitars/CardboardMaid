@@ -1,7 +1,13 @@
 <h1 align="center">Cardboard Maid</h1>
 
+
 <p align="center">
-  <img src="public/logo.png" alt="Cardboard Maid Logo" width="300" height="300">
+  <a href="https://cardboardmaid.com">
+    <img src="public/logo.png" alt="Cardboard Maid Logo" width="300" height="300">
+  </a>
+  <br />
+<a href="https://cardboardmaid.com" style="display: block" target="_blank" rel="noopener noreferrer">cardboardmaid.com</a>
+
 </p>
 
 <p align="center">
