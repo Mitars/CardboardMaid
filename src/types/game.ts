@@ -39,6 +39,7 @@ export interface Game {
   mechanics?: string[];
   designers?: string[];
   userRating?: number;
+  lastPlayed?: Date; // Date of most recent play
 }
 
 export interface GameCollection {
@@ -47,18 +48,20 @@ export interface GameCollection {
   games: Game[];
 }
 
-export type SortOption = 
-  | 'rating-high'
-  | 'rating-low'
-  | 'name-asc'
-  | 'name-desc'
-  | 'year-new'
-  | 'year-old'
-  | 'complexity-high'
-  | 'complexity-low'
-  | 'plays-high'
-  | 'plays-low'
-  | 'user-rating';
+export type SortOption =
+  | 'rating'
+  | 'user-rating'
+  | 'name'
+  | 'year'
+  | 'complexity'
+  | 'plays'
+  | 'last-played'
+  | 'random';
+
+export type SortDirection = 'asc' | 'desc';
+
+// Sort options that support direction toggle (all except random)
+export type DirectionalSortOption = 'name' | 'year' | 'complexity' | 'plays' | 'last-played' | 'rating' | 'user-rating';
 
 export interface FilterState {
   playerCount: number | null;

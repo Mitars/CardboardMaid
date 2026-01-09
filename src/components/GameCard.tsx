@@ -1,15 +1,16 @@
-import { Game } from "@/types/game";
-import { Star, Users, Clock } from "lucide-react";
+import { Game, SortOption } from "@/types/game";
+import { Star, Users, Clock, Heart, TrendingUp, Calendar, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface GameCardProps {
   game: Game;
   index: number;
+  sortBy?: SortOption;
   onCategoryClick?: (category: string) => void;
   selectedCategory?: string | null;
 }
 
-export function GameCard({ game, index, onCategoryClick, selectedCategory }: GameCardProps) {
+export function GameCard({ game, index, sortBy, onCategoryClick, selectedCategory }: GameCardProps) {
   const formatPlaytime = (min: number, max: number) => {
     if (min === max) return `${min}m`;
     return `${min}-${max}m`;
@@ -19,6 +20,63 @@ export function GameCard({ game, index, onCategoryClick, selectedCategory }: Gam
     if (min === max) return `${min}`;
     return `${min}-${max}`;
   };
+
+  // Determine what to show in the top-right badge based on current sort
+  const getSortBadge = () => {
+    switch (sortBy) {
+      case 'rating':
+        return {
+          icon: <Star className="w-3 h-3 fill-gold text-gold" />,
+          value: game.rating.average.toFixed(1),
+        };
+      case 'user-rating':
+        if (game.userRating) {
+          return {
+            icon: <Heart className="w-3 h-3 fill-red-500 text-red-500" />,
+            value: game.userRating.toFixed(1),
+          };
+        }
+        break;
+      case 'complexity':
+        if (game.weight) {
+          return {
+            icon: <TrendingUp className="w-3 h-3" />,
+            value: game.weight.toFixed(1),
+          };
+        }
+        break;
+      case 'plays':
+        if (game.numPlays > 0) {
+          return {
+            icon: <RotateCcw className="w-3 h-3" />,
+            value: `${game.numPlays}×`,
+          };
+        }
+        break;
+      case 'last-played':
+        if (game.lastPlayed) {
+          const daysAgo = Math.floor((Date.now() - game.lastPlayed.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysAgo === 0) {
+            return { icon: <Calendar className="w-3 h-3" />, value: 'Today' };
+          } else if (daysAgo === 1) {
+            return { icon: <Calendar className="w-3 h-3" />, value: 'Yesterday' };
+          } else if (daysAgo < 7) {
+            return { icon: <Calendar className="w-3 h-3" />, value: `${daysAgo}d ago` };
+          } else if (daysAgo < 30) {
+            const weeks = Math.floor(daysAgo / 7);
+            return { icon: <Calendar className="w-3 h-3" />, value: `${weeks}w ago` };
+          } else {
+            const months = Math.floor(daysAgo / 30);
+            return { icon: <Calendar className="w-3 h-3" />, value: `${months}mo ago` };
+          }
+        }
+        break;
+    }
+    // For 'name', 'year', 'random' - no badge shown
+    return null;
+  };
+
+  const badge = getSortBadge();
 
   return (
     <Link
@@ -38,13 +96,15 @@ export function GameCard({ game, index, onCategoryClick, selectedCategory }: Gam
           />
         </div>
 
-        {/* Rating Badge */}
-        <div className="absolute top-3 right-3 flex items-center gap-1 bg-white dark:bg-black/80 backdrop-blur-sm rounded-full px-2 py-1 z-10">
-          <Star className="w-3 h-3 fill-gold text-gold" />
-          <span className="text-xs font-semibold text-card-foreground dark:text-white">
-            {game.rating.average.toFixed(1)}
-          </span>
-        </div>
+        {/* Sort Badge - shows based on current sort */}
+        {badge && (
+          <div className="absolute top-3 right-3 flex items-center gap-1 bg-white dark:bg-black/80 backdrop-blur-sm rounded-full px-2 py-1 z-10">
+            {badge.icon}
+            <span className="text-xs font-semibold text-card-foreground dark:text-white">
+              {badge.value}
+            </span>
+          </div>
+        )}
 
         {/* Rank Badge */}
         {game.rating.rank && game.rating.rank <= 100 && (
@@ -75,11 +135,6 @@ export function GameCard({ game, index, onCategoryClick, selectedCategory }: Gam
               <Clock className="w-3.5 h-3.5" />
               <span>{formatPlaytime(game.playtime.min, game.playtime.max)}</span>
             </div>
-            {game.numPlays > 0 && (
-              <div className="ml-auto">
-                <span className="text-primary font-medium">{game.numPlays}×</span>
-              </div>
-            )}
           </div>
 
           {/* Category Pills */}

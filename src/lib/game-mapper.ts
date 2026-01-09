@@ -4,7 +4,7 @@
  */
 
 import type { Game } from "@/types/game";
-import type { CollectionGame, GameInfo } from "@/services/bgg-api";
+import type { CollectionGame, GameInfo, PlayInfo } from "@/services/bgg-api";
 
 /**
  * Convert a BGG collection game to our Game format
@@ -68,6 +68,10 @@ export function collectionGameToGame(bggGame: CollectionGame): Game {
       lastModified: bggGame.status?.lastmodified || "",
     },
     numPlays: typeof bggGame.numplays === "number" ? bggGame.numplays : parseInt(String(bggGame.numplays || "0"), 10),
+    // User's personal rating from BGG (stats.rating.value contains the user's rating)
+    userRating: bggGame.stats?.rating?.value !== undefined && bggGame.stats.rating.value !== ""
+      ? parseFloat(String(bggGame.stats.rating.value))
+      : undefined,
   };
 }
 
@@ -224,4 +228,44 @@ export function gameInfoToGame(gameInfo: GameInfo): Game {
     mechanics,
     designers,
   };
+}
+
+/**
+ * Merge play data into games
+ * Adds lastPlayed date based on the most recent play for each game
+ * @param games Base games from collection
+ * @param plays Play data from BGG API
+ * @returns Games with lastPlayed dates
+ */
+export function mergePlays(games: Game[], plays: PlayInfo[]): Game[] {
+  // Group plays by game ID and find the most recent play for each game
+  const lastPlayedMap = new Map<string, Date>();
+
+  console.log('🔍 mergePlays - Total games:', games.length);
+  console.log('🔍 mergePlays - Total plays:', plays.length);
+  console.log('🔍 mergePlays - Sample game IDs:', games.slice(0, 5).map(g => g.id));
+  console.log('🔍 mergePlays - Sample play gameIds:', plays.slice(0, 5).map(p => ({ id: p.gameId, date: p.date })));
+
+  plays.forEach((play) => {
+    const gameId = String(play.gameId); // Convert to string to match game.id type
+    const existing = lastPlayedMap.get(gameId);
+    if (!existing || play.date > existing) {
+      lastPlayedMap.set(gameId, play.date);
+    }
+  });
+
+  console.log('🔍 mergePlays - Last played map entries:', Array.from(lastPlayedMap.entries()));
+
+  // Merge lastPlayed dates into games
+  const result = games.map((game) => {
+    const lastPlayed = lastPlayedMap.get(game.id);
+    if (lastPlayed) {
+      console.log(`✅ Matched game ${game.name} (${game.id}) with lastPlayed:`, lastPlayed);
+    }
+    return lastPlayed ? { ...game, lastPlayed } : game;
+  });
+
+  console.log('🔍 mergePlays - Games with lastPlayed:', result.filter(g => g.lastPlayed).length);
+
+  return result;
 }

@@ -3,15 +3,84 @@ import { useNavigate, useParams } from "react-router-dom";
 import { GameCard } from "@/components/GameCard";
 import { FilterHeader } from "@/components/FilterHeader";
 import { Footer } from "@/components/Footer";
-import { FilterState, SortOption, Game } from "@/types/game";
-import { useUserCollection, useGamesInfo, useValidateUsername } from "@/hooks/use-bgg-api";
-import { mapCollectionToGames, mergeGamesInfo } from "@/lib/game-mapper";
+import { FilterState, SortOption, SortDirection, Game } from "@/types/game";
+import { useUserCollection, useGamesInfo, useValidateUsername, useUserPlays } from "@/hooks/use-bgg-api";
+import { mapCollectionToGames, mergeGamesInfo, mergePlays } from "@/lib/game-mapper";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 
 const Collection = () => {
   const navigate = useNavigate();
   const { username: urlUsername } = useParams();
+
+  // Get initial sortBy from localStorage with migration for old sort options
+  const getInitialSortBy = (): SortOption => {
+    const stored = localStorage.getItem("bgg-sortBy") as SortOption;
+    if (!stored) return "user-rating";
+
+    // Migrate old sort options to new directional ones
+    const migrations: Record<string, { option: SortOption; direction: SortDirection }> = {
+      "rating-high": { option: "rating", direction: "desc" },
+      "name-asc": { option: "name", direction: "asc" },
+      "name-desc": { option: "name", direction: "desc" },
+      "year-new": { option: "year", direction: "desc" },
+      "year-old": { option: "year", direction: "asc" },
+      "complexity-low": { option: "complexity", direction: "asc" },
+      "complexity-high": { option: "complexity", direction: "desc" },
+      "plays-high": { option: "plays", direction: "desc" },
+      "plays-low": { option: "plays", direction: "asc" },
+      "played-recently": { option: "last-played", direction: "desc" },
+      "played-long-ago": { option: "last-played", direction: "asc" },
+    };
+
+    const migration = migrations[stored];
+    if (migration) {
+      // Update localStorage with new values
+      localStorage.setItem("bgg-sortBy", migration.option);
+      localStorage.setItem("bgg-sortDirection", migration.direction);
+      return migration.option;
+    }
+
+    return stored;
+  };
+
+  const initialSortBy = getInitialSortBy();
+
+  // Detect if this is a page refresh (vs navigation)
+  const isPageRefresh = (
+    window.performance.getEntriesByType &&
+    window.performance.getEntriesByType('navigation').length > 0 &&
+    (window.performance.getEntriesByType('navigation')[0] as any)?.type === 'reload'
+  ) || false;
+
+  // Random seed state - persists in localStorage to maintain shuffle during navigation
+  // But regenerates on page refresh
+  const [randomSeed, setRandomSeed] = useState<number>(() => {
+    const stored = localStorage.getItem("bgg-random-seed");
+    const sessionOriginKey = "bgg-time-origin";
+    const timeOrigin = Math.floor(window.performance.timeOrigin || 0);
+    const storedOrigin = sessionStorage.getItem(sessionOriginKey);
+    const isNewOrigin = storedOrigin !== String(timeOrigin);
+    // If page refresh, generate a new seed once per reload (timeOrigin changes on reload)
+    if (isPageRefresh && isNewOrigin) {
+      const newSeed = Date.now();
+      localStorage.setItem("bgg-random-seed", String(newSeed));
+      sessionStorage.setItem(sessionOriginKey, String(timeOrigin));
+      return newSeed;
+    }
+    // Otherwise use stored seed if available, or generate and save new one
+    if (stored) {
+      if (isNewOrigin) {
+        sessionStorage.setItem(sessionOriginKey, String(timeOrigin));
+      }
+      return parseInt(stored, 10);
+    }
+    const newSeed = Date.now();
+    localStorage.setItem("bgg-random-seed", String(newSeed));
+    sessionStorage.setItem(sessionOriginKey, String(timeOrigin));
+    return newSeed;
+  });
+
   const [username, setUsername] = useState<string>("");
   const [filters, setFilters] = useState<FilterState>(() => {
     const saved = localStorage.getItem("bgg-filters");
@@ -24,8 +93,26 @@ const Collection = () => {
           category: null,
         };
   });
-  const [sortBy, setSortBy] = useState<SortOption>(() => {
-    return (localStorage.getItem("bgg-sortBy") as SortOption) || "rating-high";
+  const [sortBy, setSortBy] = useState<SortOption>(() => initialSortBy);
+
+  // Sort direction for directional sorts (defaults based on sort option)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => {
+    const saved = localStorage.getItem("bgg-sortDirection");
+    if (saved) return saved === 'desc' ? 'desc' : 'asc';
+
+    // Set default direction based on sort option
+    const defaults: Record<SortOption, SortDirection> = {
+      'user-rating': 'desc',
+      'rating': 'desc',
+      'name': 'asc',
+      'year': 'desc',
+      'complexity': 'asc',
+      'plays': 'desc',
+      'last-played': 'desc',
+      'random': 'desc', // fallback, not used
+    };
+
+    return defaults[initialSortBy] || 'desc';
   });
 
   // Fetch collection from BGG API
@@ -43,6 +130,9 @@ const Collection = () => {
 
   const { data: gamesInfo, isLoading: isLoadingGamesInfo } = useGamesInfo(gameIds, gameIds.length > 0);
 
+  // Fetch user plays to get lastPlayed dates
+  const { data: plays } = useUserPlays(username, !!username);
+
   // Convert BGG collection to our Game format and merge with detailed info
   const games = useMemo(() => {
     if (!bggCollection) return [];
@@ -53,8 +143,35 @@ const Collection = () => {
       games = mergeGamesInfo(games, gamesInfo);
     }
 
+    if (plays && plays.length > 0) {
+      games = mergePlays(games, plays);
+    }
+
     return games;
-  }, [bggCollection, gamesInfo]);
+  }, [bggCollection, gamesInfo, plays]);
+
+  const randomSortKey = useMemo(() => {
+    const keyMap = new Map<string, number>();
+    if (games.length === 0) return keyMap;
+    const seed = randomSeed;
+    const hashId = (id: string) => {
+      let h = seed;
+      for (let i = 0; i < id.length; i++) {
+        h = Math.imul(31, h) + id.charCodeAt(i);
+        h |= 0;
+      }
+      h ^= h >>> 16;
+      h = Math.imul(h, 0x85ebca6b);
+      h ^= h >>> 13;
+      return h >>> 0;
+    };
+
+    games.forEach((game) => {
+      keyMap.set(game.id, hashId(game.id));
+    });
+
+    return keyMap;
+  }, [games, randomSeed]);
 
   // Extract all unique categories from games
   const availableCategories = useMemo(() => {
@@ -73,12 +190,21 @@ const Collection = () => {
     });
   };
 
-  // Handle clearing category filter
-  const handleClearCategory = () => {
-    setFilters({
-      ...filters,
-      category: null,
-    });
+  // Handle reshuffle for random sort
+  const handleReshuffle = () => {
+    const newSeed = Date.now();
+    localStorage.setItem("bgg-random-seed", String(newSeed));
+    setRandomSeed(newSeed);
+  };
+
+  const handleRefreshCollection = () => {
+    handleReshuffle();
+    refetchCollection();
+  };
+
+  // Handle sort direction toggle
+  const handleSortDirectionToggle = () => {
+    setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
   };
 
   // Validate username from URL - always validate when URL username is present
@@ -123,6 +249,10 @@ const Collection = () => {
   useEffect(() => {
     localStorage.setItem("bgg-sortBy", sortBy);
   }, [sortBy]);
+
+  useEffect(() => {
+    localStorage.setItem("bgg-sortDirection", sortDirection);
+  }, [sortDirection]);
 
   // Redirect to home with username if collection fails to load
   useEffect(() => {
@@ -172,23 +302,63 @@ const Collection = () => {
       SortOption,
       (a: Game, b: Game) => number
     > = {
-      "rating-high": (a, b) => b.rating.average - a.rating.average,
-      "rating-low": (a, b) => a.rating.average - b.rating.average,
-      "name-asc": (a, b) => a.name.localeCompare(b.name),
-      "name-desc": (a, b) => b.name.localeCompare(a.name),
-      "year-new": (a, b) => b.yearPublished - a.yearPublished,
-      "year-old": (a, b) => a.yearPublished - b.yearPublished,
-      "complexity-high": (a, b) => (b.weight || 0) - (a.weight || 0),
-      "complexity-low": (a, b) => (a.weight || 5) - (b.weight || 5),
-      "plays-high": (a, b) => b.numPlays - a.numPlays,
-      "plays-low": (a, b) => a.numPlays - b.numPlays,
-      "user-rating": (a, b) => (b.userRating || 0) - (a.userRating || 0),
+      "rating": (a, b) => {
+        const comparison = b.rating.average - a.rating.average;
+        return sortDirection === 'desc' ? comparison : -comparison;
+      },
+      "name": (a, b) => {
+        const comparison = b.name.localeCompare(a.name);
+        return sortDirection === 'desc' ? comparison : -comparison;
+      },
+      "year": (a, b) => {
+        const comparison = b.yearPublished - a.yearPublished;
+        return sortDirection === 'desc' ? comparison : -comparison;
+      },
+      "complexity": (a, b) => {
+        const comparison = (a.weight || 0) - (b.weight || 0);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      },
+      "plays": (a, b) => {
+        const comparison = b.numPlays - a.numPlays;
+        if (comparison !== 0) return sortDirection === 'desc' ? comparison : -comparison;
+        // Tiebreaker: sort by last played (respects direction)
+        // desc: most, least, never (newest -> oldest)
+        // asc: never, least, most (oldest -> newest)
+        if (!a.lastPlayed && !b.lastPlayed) return 0;
+        if (!a.lastPlayed) return sortDirection === 'desc' ? 1 : -1;
+        if (!b.lastPlayed) return sortDirection === 'desc' ? -1 : 1;
+        const lastPlayedComparison = b.lastPlayed.getTime() - a.lastPlayed.getTime();
+        return sortDirection === 'desc' ? lastPlayedComparison : -lastPlayedComparison;
+      },
+      "user-rating": (a, b) => {
+        const comparison = (b.userRating || 0) - (a.userRating || 0);
+        return sortDirection === 'desc' ? comparison : -comparison;
+      },
+      "last-played": (a, b) => {
+        // Sort by lastPlayed date with direction support
+        // desc: recent, least recent, never
+        // asc: never, least recent, recent
+        if (!a.lastPlayed && !b.lastPlayed) return 0;
+        if (!a.lastPlayed) return sortDirection === 'desc' ? 1 : -1;
+        if (!b.lastPlayed) return sortDirection === 'desc' ? -1 : 1;
+        const comparison = b.lastPlayed.getTime() - a.lastPlayed.getTime();
+        return sortDirection === 'desc' ? comparison : -comparison;
+      },
+      "random": (a, b) => {
+        const aKey = randomSortKey.get(a.id) ?? 0;
+        const bKey = randomSortKey.get(b.id) ?? 0;
+        return aKey - bKey;
+      },
     };
 
-    gamesList.sort(sortFunctions[sortBy]);
+    // Only sort if we have a valid sort function, otherwise keep original order
+    const sortFn = sortFunctions[sortBy];
+    if (sortFn) {
+      gamesList = [...gamesList].sort(sortFn);
+    }
 
     return gamesList;
-  }, [games, filters, sortBy]);
+  }, [games, filters, sortBy, sortDirection, randomSeed, randomSortKey]);
 
   // Loading state
   if (!username) {
@@ -230,7 +400,7 @@ const Collection = () => {
           </p>
           <div className="flex gap-4 justify-center">
             <Button
-              onClick={() => refetchCollection()}
+              onClick={handleRefreshCollection}
               className="gap-2"
             >
               <RefreshCw className="w-4 h-4" />
@@ -260,8 +430,10 @@ const Collection = () => {
             username={username}
             filters={filters}
             sortBy={sortBy}
+            sortDirection={sortDirection}
             onFiltersChange={setFilters}
             onSortChange={setSortBy}
+            onSortDirectionToggle={handleSortDirectionToggle}
             totalGames={0}
             filteredCount={0}
           />
@@ -287,8 +459,10 @@ const Collection = () => {
           username={username}
           filters={filters}
           sortBy={sortBy}
+          sortDirection={sortDirection}
           onFiltersChange={setFilters}
           onSortChange={setSortBy}
+          onSortDirectionToggle={handleSortDirectionToggle}
           totalGames={0}
           filteredCount={0}
         />
@@ -302,7 +476,7 @@ const Collection = () => {
               Expansions are automatically excluded.
             </p>
             <Button
-              onClick={() => refetchCollection()}
+              onClick={handleRefreshCollection}
               variant="outline"
               className="gap-2"
             >
@@ -321,11 +495,14 @@ const Collection = () => {
         username={username}
         filters={filters}
         sortBy={sortBy}
+        sortDirection={sortDirection}
         onFiltersChange={setFilters}
         onSortChange={setSortBy}
+        onSortDirectionToggle={handleSortDirectionToggle}
         totalGames={games.length}
         filteredCount={filteredAndSortedGames.length}
         availableCategories={availableCategories}
+        onReshuffle={sortBy === "random" ? handleReshuffle : undefined}
       />
 
       <main className="w-full px-4 py-8">
@@ -336,6 +513,7 @@ const Collection = () => {
                 key={game.id}
                 game={game}
                 index={index}
+                sortBy={sortBy}
                 onCategoryClick={handleCategoryClick}
                 selectedCategory={filters.category}
               />

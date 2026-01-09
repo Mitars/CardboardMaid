@@ -1,5 +1,5 @@
-import { FilterState, SortOption } from "@/types/game";
-import { X, Filter } from "lucide-react";
+import { FilterState, SortOption, SortDirection } from "@/types/game";
+import { X, Filter, Shuffle, ArrowUp, ArrowDown } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -10,16 +10,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Button } from "@/components/ui/button";
 
 interface FilterHeaderProps {
   username: string;
   filters: FilterState;
   sortBy: SortOption;
+  sortDirection: SortDirection;
   onFiltersChange: (filters: FilterState) => void;
   onSortChange: (sort: SortOption) => void;
+  onSortDirectionToggle: () => void;
   totalGames: number;
   filteredCount: number;
   availableCategories?: string[];
+  onReshuffle?: () => void;
 }
 
 const playtimeOptions = [
@@ -47,32 +51,34 @@ const playerOptions = [
 ];
 
 const sortOptions: { value: SortOption; label: string }[] = [
-  { value: "rating-high", label: "highly rated" },
-  { value: "name-asc", label: "A → Z" },
-  { value: "name-desc", label: "Z → A" },
-  { value: "year-new", label: "newest" },
-  { value: "year-old", label: "classics" },
-  { value: "complexity-high", label: "complex" },
-  { value: "complexity-low", label: "easy to learn" },
-  { value: "plays-high", label: "most played" },
-  { value: "plays-low", label: "unplayed" },
   { value: "user-rating", label: "my favorites" },
-  { value: "rating-low", label: "hidden gems" },
-  { value: "any", label: "any order" },
+  { value: "rating", label: "rating" },
+  { value: "name", label: "name" },
+  { value: "year", label: "release year" },
+  { value: "complexity", label: "complexity" },
+  { value: "plays", label: "times played" },
+  { value: "last-played", label: "last played" },
+  { value: "random", label: "random" },
 ];
 
 export function FilterHeader({
   username,
   filters,
   sortBy,
+  sortDirection,
   onFiltersChange,
   onSortChange,
+  onSortDirectionToggle,
   totalGames,
   filteredCount,
   availableCategories = [],
+  onReshuffle,
 }: FilterHeaderProps) {
   const navigate = useNavigate();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  // Check if current sort is directional (supports asc/desc toggle) - all except random
+  const isDirectional = sortBy !== 'random';
   const handlePlayerChange = (value: string) => {
     onFiltersChange({
       ...filters,
@@ -154,7 +160,7 @@ export function FilterHeader({
             {/* Filter Sentence - Desktop */}
             <div className="flex-1 min-w-0 flex justify-center hidden md:block">
               <p className="text-base text-foreground leading-relaxed flex flex-wrap items-center justify-center gap-1.5">
-                <span className="text-muted-foreground -ml-1.5">I want to play a game that takes</span>
+                <span className="text-muted-foreground -ml-1.5">I want a game that takes</span>
                 <InlineSelect
                   value={getCurrentPlaytimeValue()}
                   onValueChange={handlePlaytimeChange}
@@ -193,12 +199,33 @@ export function FilterHeader({
                     </button>
                   )}
                 </span>
-                <span className="text-muted-foreground">I prefer games that are</span>
-                <InlineSelect
-                  value={sortBy}
-                  onValueChange={(v) => onSortChange(v as SortOption)}
-                  options={sortOptions}
-                />
+                <span className="text-muted-foreground">sort by</span>
+                <span className="flex items-center gap-1">
+                  <InlineSelect
+                    value={sortBy}
+                    onValueChange={(v) => onSortChange(v as SortOption)}
+                    options={sortOptions}
+                  />
+                  {isDirectional && (
+                    <button
+                      onClick={onSortDirectionToggle}
+                      className="w-7 h-6 flex items-center justify-center rounded-full bg-muted hover:bg-primary/20 text-muted-foreground hover:text-primary transition-colors"
+                      title={`Currently: ${sortDirection === 'asc' ? 'ascending' : 'descending'} (click to reverse)`}
+                    >
+                      <ArrowUp className={`w-3.5 h-3.5 -mr-0.5 ${sortDirection === 'desc' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <ArrowDown className={`w-3.5 h-3.5 ${sortDirection === 'asc' ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </button>
+                  )}
+                  {sortBy === "random" && onReshuffle && (
+                    <button
+                      onClick={onReshuffle}
+                      className="w-6 h-6 flex items-center justify-center rounded-full bg-muted hover:bg-primary/20 text-muted-foreground hover:text-primary transition-colors"
+                      title="Shuffle"
+                    >
+                      <Shuffle className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </span>
               </p>
             </div>
 
@@ -320,18 +347,45 @@ export function FilterHeader({
               {/* Sort By */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Sort By</label>
-                <Select value={sortBy} onValueChange={(v) => onSortChange(v as SortOption)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border shadow-elevated z-50 rounded-xl max-h-96 overflow-y-auto">
-                    {sortOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="cursor-pointer rounded-lg">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Select value={sortBy} onValueChange={(v) => onSortChange(v as SortOption)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-border shadow-elevated z-50 rounded-xl max-h-96 overflow-y-auto">
+                        {sortOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value} className="cursor-pointer rounded-lg">
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {isDirectional && (
+                    <Button
+                      type="button"
+                      onClick={onSortDirectionToggle}
+                      variant="outline"
+                      className="shrink-0 px-1.5"
+                      title={`Currently: ${sortDirection === 'asc' ? 'ascending' : 'descending'} (click to reverse)`}
+                    >
+                      <ArrowUp className={`w-4 h-4 ${sortDirection === 'asc' ? 'text-primary' : 'text-muted-foreground/50'}`} />
+                      <ArrowDown className={`w-4 h-4 ${sortDirection === 'desc' ? 'text-primary' : 'text-muted-foreground/50'}`} />
+                    </Button>
+                  )}
+                  {sortBy === "random" && onReshuffle && (
+                    <Button
+                      type="button"
+                      onClick={onReshuffle}
+                      variant="outline"
+                      className="shrink-0"
+                      title="Shuffle"
+                    >
+                      <Shuffle className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Results Info */}

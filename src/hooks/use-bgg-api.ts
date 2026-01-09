@@ -9,9 +9,11 @@ import {
   getUserCollection,
   getGamesInfo,
   getGameInfo,
+  getAllUserPlays,
   type UserInfo,
   type CollectionGame,
   type GameInfo,
+  type PlayInfo,
   type BggApiResult,
 } from "@/services/bgg-api";
 
@@ -23,6 +25,7 @@ export const bggQueryKeys = {
   collection: (username: string) => ["bgg", "collection", username] as const,
   games: (gameIds: string[]) => ["bgg", "games", gameIds] as const,
   game: (gameId: string) => ["bgg", "game", gameId] as const,
+  plays: (username: string) => ["bgg", "plays", username] as const,
 };
 
 /**
@@ -197,7 +200,33 @@ export function useInvalidateUser() {
     queryClient.invalidateQueries({
       queryKey: ["bgg", "collection", username],
     });
+    queryClient.invalidateQueries({
+      queryKey: ["bgg", "plays", username],
+    });
   };
+}
+
+/**
+ * Hook to get user's plays
+ * Returns all plays for the user with pagination
+ */
+export function useUserPlays(username: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: bggQueryKeys.plays(username),
+    queryFn: async () => {
+      const result = await getAllUserPlays(username);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return result.data;
+    },
+    enabled: enabled && username.length > 0,
+    retry: 2,
+    staleTime: 5 * 60 * 1000, // 5 minutes - plays can change frequently
+    gcTime: 30 * 60 * 1000, // 30 minutes
+  });
 }
 
 /**

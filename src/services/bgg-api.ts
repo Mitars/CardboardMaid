@@ -107,6 +107,21 @@ export type GameInfo = {
   };
 };
 
+export type PlayInfo = {
+  id: string;
+  gameId: string;
+  date: Date;
+  quantity: number;
+  length?: number;
+  players?: Array<{
+    username: string;
+    name: string;
+    score?: string;
+    new?: boolean;
+    win?: boolean;
+  }>;
+};
+
 /**
  * Retry configuration for BGG API
  * BGG often returns 202 when processing requests, requiring retries
@@ -524,6 +539,166 @@ export async function getGameInfo(
   return {
     success: true,
     data: result.data[0],
+  };
+}
+
+/**
+ * Get user's plays
+ * GET /xmlapi2/plays?username={username}
+ *
+ * Returns all plays for the user with pagination
+ */
+export async function getUserPlays(
+  username: string,
+  page: number = 1
+): Promise<BggApiResult<{ plays: PlayInfo[]; totalPlays: number }>> {
+  console.log("A");
+  try {
+    console.log("B");
+    if (!username || username.trim().length === 0) {
+      return {
+        success: false,
+        error: "Username cannot be empty",
+      };
+    }
+
+    console.log("C");
+
+    // Construct URL differently for dev vs production
+    let url: string;
+    if (import.meta.env.DEV) {
+      url = `${BGG_API_BASE}/plays?username=${encodeURIComponent(username)}&page=${page}`;
+    } else {
+      const params = new URLSearchParams({
+        username,
+        page: String(page),
+      });
+      url = `${BGG_API_BASE}plays&${params.toString()}`;
+    }
+
+    console.log("D");
+
+    const response = await fetchWithRetry(url);
+    const xmlText = await response.text();
+
+    // Check if still processing
+    if (isBggProcessing(xmlText)) {
+      return {
+        success: false,
+        error: "BGG API is still processing",
+        retryLater: true,
+        backoff: 2,
+      };
+    }
+
+    console.log("E");
+    const json = parseXmlToJson(xmlText);
+    console.log("Parsed JSON:", JSON.stringify(json, null, 2));
+
+    // The <plays> element is the root, so json itself is the plays object
+    // Check if json has 'play' property (meaning it's already the plays object)
+    const playsElement = json?.play ? json : json?.plays;
+    console.log("F", playsElement);
+
+    if (!playsElement || !playsElement.play) {
+      console.log("H - playsElement or playsElement.play is falsy!");
+      return {
+        success: true,
+        data: { plays: [], totalPlays: 0 },
+      };
+    }
+
+    console.log("G");
+
+    const totalPlays = parseInt(String(playsElement.total || 0), 10);
+    const playsArray = Array.isArray(playsElement.play) ? playsElement.play : [playsElement.play].filter(Boolean);
+
+    console.log('🔍 BGG Plays raw data:', playsArray);
+
+    const plays: PlayInfo[] = playsArray.map((play: any) => {
+      const gameId = play.item?.objectid || play.objectid;
+      console.log('🔍 Processing play:', {
+        playId: play.id,
+        gameId,
+        date: play.date,
+        rawPlay: play
+      });
+      return {
+        id: play.id,
+        gameId: gameId,
+        date: new Date(play.date),
+        quantity: parseInt(String(play.quantity || 1), 10),
+        length: play.length ? parseInt(String(play.length), 10) : undefined,
+        players: play.players?.player
+          ? (Array.isArray(play.players.player) ? play.players.player : [play.players.player]).map((p: any) => ({
+              username: p.username,
+              name: p.name,
+              score: p.score,
+              new: p.new === "1" || p.new === 1,
+              win: p.win === "1" || p.win === 1,
+            }))
+          : undefined,
+      };
+    });
+
+    console.log('🔍 Processed plays:', plays);
+
+    return {
+      success: true,
+      data: { plays, totalPlays },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch user plays",
+      retryLater: true,
+    };
+  }
+}
+
+/**
+ * Get all pages of user's plays
+ * Fetches all plays by paginating through results
+ */
+export async function getAllUserPlays(
+  username: string
+): Promise<BggApiResult<PlayInfo[]>> {
+  const firstPage = await getUserPlays(username, 1);
+
+  if (!firstPage.success) {
+    return firstPage as BggApiResult<never>;
+  }
+
+  const { plays: firstPagePlays, totalPlays } = firstPage.data;
+  const playsPerPage = firstPagePlays.length;
+  const totalPages = Math.ceil(totalPlays / playsPerPage);
+
+  if (totalPages <= 1) {
+    return {
+      success: true,
+      data: firstPagePlays,
+    };
+  }
+
+  // Fetch remaining pages in parallel
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) => getUserPlays(username, i + 2))
+  );
+
+  // Check if any pages failed
+  const failedPage = remainingPages.find((result) => !result.success);
+  if (failedPage) {
+    return failedPage as BggApiResult<never>;
+  }
+
+  const allPlays = remainingPages.reduce(
+    (acc, result) => acc.concat(result.data.plays),
+    firstPagePlays
+  );
+
+  return {
+    success: true,
+    data: allPlays,
   };
 }
 
