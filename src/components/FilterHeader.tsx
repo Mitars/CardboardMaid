@@ -1,7 +1,7 @@
 import { FilterState, SortOption, SortDirection } from "@/types/game";
-import { X, Filter, Shuffle, ArrowUp, ArrowDown } from "lucide-react";
+import { X, Filter, Shuffle, ArrowUp, ArrowDown, Dice6, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -24,6 +24,7 @@ interface FilterHeaderProps {
   filteredCount: number;
   availableCategories?: string[];
   onReshuffle?: () => void;
+  onPickRandom?: () => void;
 }
 
 const playtimeOptions = [
@@ -73,12 +74,33 @@ export function FilterHeader({
   filteredCount,
   availableCategories = [],
   onReshuffle,
+  onPickRandom,
 }: FilterHeaderProps) {
   const navigate = useNavigate();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState(filters.searchQuery || "");
 
   // Check if current sort is directional (supports asc/desc toggle) - all except random
   const isDirectional = sortBy !== 'random';
+
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    onFiltersChange({
+      ...filters,
+      searchQuery: value || null,
+    });
+  };
+
+  const handlePickRandom = () => {
+    if (onPickRandom) {
+      onPickRandom();
+    }
+  };
+
+  // Sync search input when filters change externally (e.g., from Pick Random)
+  useEffect(() => {
+    setSearchInput(filters.searchQuery || "");
+  }, [filters.searchQuery]);
   const handlePlayerChange = (value: string) => {
     onFiltersChange({
       ...filters,
@@ -145,9 +167,9 @@ export function FilterHeader({
   return (
     <>
       <header className="bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-50">
-        <div className="w-full px-4 py-1 md:px-4 md:py-4">
-          {/* Logo and Filter Row */}
-          <div className="flex items-center gap-3 md:gap-4">
+        <div className="w-full px-4 py-2 md:px-4 md:py-4">
+          {/* Logo, Search and Filter Row */}
+          <div className="flex flex-row md:flex-row items-center md:items-center gap-2 md:gap-4">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 md:gap-2.5 shrink-0">
             <img
@@ -157,10 +179,22 @@ export function FilterHeader({
             />
             </Link>
 
-            {/* Filter Sentence - Desktop */}
-            <div className="flex-1 min-w-0 flex justify-center hidden md:block">
+            {/* Filter Sentence & Search Container - Desktop */}
+            <div className="hidden md:flex flex-col items-center gap-2 flex-1">
+              {/* Filter Sentence - Desktop */}
               <p className="text-base text-foreground leading-relaxed flex flex-wrap items-center justify-center gap-1.5">
-                <span className="text-muted-foreground -ml-1.5">I want a game that takes</span>
+                <span className="text-muted-foreground -ml-1.5">I want to play</span>
+                <div className="relative w-36">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder="any game"
+                    className="w-full pl-9 pr-3 py-0.5 bg-secondary hover:bg-secondary/80 border-0 rounded-full shadow-none text-primary font-medium text-base hover:bg-secondary/80 placeholder:text-primary transition-colors focus:ring-0 focus:ring-offset-0"
+                  />
+                </div>
+                <span className="text-muted-foreground">that takes</span>
                 <InlineSelect
                   value={getCurrentPlaytimeValue()}
                   onValueChange={handlePlaytimeChange}
@@ -192,7 +226,7 @@ export function FilterHeader({
                   {filters.category && (
                     <button
                       onClick={() => handleCategoryChange("_all_categories")}
-                      className="w-6 h-6 flex items-center justify-center rounded-full bg-muted hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                      className="flex items-center justify-center w-6 h-6 rounded-full bg-muted hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors self-center"
                       title="Clear category filter"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -209,7 +243,7 @@ export function FilterHeader({
                   {isDirectional && (
                     <button
                       onClick={onSortDirectionToggle}
-                      className="w-7 h-6 flex items-center justify-center rounded-full bg-muted hover:bg-primary/20 text-muted-foreground hover:text-primary transition-colors"
+                      className="flex items-center justify-center w-7 h-6 rounded-full bg-muted hover:bg-primary/20 text-muted-foreground hover:text-primary transition-colors self-center"
                       title={`Currently: ${sortDirection === 'asc' ? 'ascending' : 'descending'} (click to reverse)`}
                     >
                       <ArrowUp className={`w-3.5 h-3.5 -mr-0.5 ${sortDirection === 'desc' ? 'text-primary' : 'text-muted-foreground'}`} />
@@ -219,7 +253,7 @@ export function FilterHeader({
                   {sortBy === "random" && onReshuffle && (
                     <button
                       onClick={onReshuffle}
-                      className="w-6 h-6 flex items-center justify-center rounded-full bg-muted hover:bg-primary/20 text-muted-foreground hover:text-primary transition-colors"
+                      className="flex items-center justify-center w-6 h-6 rounded-full bg-muted hover:bg-primary/20 text-muted-foreground hover:text-primary transition-colors self-center"
                       title="Shuffle"
                     >
                       <Shuffle className="w-3.5 h-3.5" />
@@ -230,19 +264,46 @@ export function FilterHeader({
             </div>
 
             {/* Mobile Filter Button & Theme Toggle */}
-            <div className="flex-1 md:hidden flex items-center justify-end gap-2">
-              <button
-                onClick={() => setIsMobileFilterOpen(true)}
-                className="flex items-center gap-1.5 px-2 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
-              >
-                <Filter className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Filter</span>
-              </button>
-              <div className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{filteredCount}</span>
-                {filteredCount !== totalGames && <span>/{totalGames}</span>} games
+            <div className="flex-1 md:hidden flex items-center gap-2">
+              <div className="flex-1 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => {
+                    if (sortBy !== 'random') {
+                      onSortChange('random');
+                    }
+                    if (onReshuffle) {
+                      onReshuffle();
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+                >
+                  <Shuffle className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">Shuffle Games</span>
+                </button>
+                {onPickRandom && filteredCount > 0 && (
+                  <button
+                    onClick={handlePickRandom}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+                  >
+                    <Dice6 className="w-3.5 h-3.5" />
+                    <span className="text-xs font-medium">Pick Random</span>
+                  </button>
+                )}
               </div>
-              <ThemeToggle />
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setIsMobileFilterOpen(true)}
+                  className="flex items-center gap-1.5 px-2 py-1.5 bg-muted/50 hover:bg-muted/80 rounded-lg transition-colors"
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">Filter</span>
+                </button>
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{filteredCount}</span>
+                  {filteredCount !== totalGames && <span>/{totalGames}</span>} games
+                </div>
+                <ThemeToggle />
+              </div>
             </div>
 
             {/* Results Count & Theme Toggle - Desktop */}
@@ -251,6 +312,16 @@ export function FilterHeader({
                 <span className="font-semibold text-foreground">{filteredCount}</span>
                 {filteredCount !== totalGames && <span>/{totalGames}</span>} games
               </div>
+              {onPickRandom && filteredCount > 0 && (
+                <button
+                  onClick={handlePickRandom}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 border border-primary rounded-full shadow-none text-primary font-medium text-base hover:bg-secondary/80 transition-colors focus:ring-0 focus:ring-offset-0"
+                  title="Pick a random game (weighted by sort order)"
+                >
+                  <Dice6 className="w-3.5 h-3.5" />
+                  <span className="text-sm">Pick Random</span>
+                </button>
+              )}
               <ThemeToggle />
             </div>
           </div>
@@ -279,38 +350,86 @@ export function FilterHeader({
             </div>
 
             <div className="p-4 space-y-6">
+              {/* Search */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Search</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={searchInput}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      placeholder="Search games..."
+                      className="w-full pl-9 pr-4 py-2 bg-muted/50 hover:bg-muted transition-colors border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                  </div>
+                  {filters.searchQuery && (
+                    <button
+                      onClick={() => handleSearchChange("")}
+                      className="w-10 h-10 flex items-center justify-center rounded-lg bg-muted hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      title="Clear search"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Playtime Filter */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Playtime</label>
-                <Select value={getCurrentPlaytimeValue()} onValueChange={handlePlaytimeChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border shadow-elevated z-50 rounded-xl">
-                    {playtimeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="cursor-pointer rounded-lg">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select value={getCurrentPlaytimeValue()} onValueChange={handlePlaytimeChange}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border shadow-elevated z-50 rounded-xl">
+                      {playtimeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value} className="cursor-pointer rounded-lg">
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(filters.minPlaytime !== null || filters.maxPlaytime !== null) && (
+                    <button
+                      onClick={() => handlePlaytimeChange("any")}
+                      className="w-10 h-10 flex items-center justify-center rounded-lg bg-muted hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      title="Clear playtime filter"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Player Count Filter */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Number of Players</label>
-                <Select value={filters.playerCount?.toString() || "any"} onValueChange={handlePlayerChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border shadow-elevated z-50 rounded-xl">
-                    {playerOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="cursor-pointer rounded-lg">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select value={filters.playerCount?.toString() || "any"} onValueChange={handlePlayerChange}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border shadow-elevated z-50 rounded-xl">
+                      {playerOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value} className="cursor-pointer rounded-lg">
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {filters.playerCount !== null && (
+                    <button
+                      onClick={() => handlePlayerChange("any")}
+                      className="w-10 h-10 flex items-center justify-center rounded-lg bg-muted hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      title="Clear player count filter"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Category Filter */}

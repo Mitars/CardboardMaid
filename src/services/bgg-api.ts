@@ -657,6 +657,103 @@ export async function getUserPlays(
 }
 
 /**
+ * Get plays for a specific game
+ * GET /xmlapi2/plays?username={username}&id={gameId}
+ *
+ * Returns all plays for the specific game
+ */
+export async function getGamePlays(
+  username: string,
+  gameId: string
+): Promise<BggApiResult<PlayInfo[]>> {
+  try {
+    if (!username || username.trim().length === 0) {
+      return {
+        success: false,
+        error: "Username cannot be empty",
+      };
+    }
+
+    if (!gameId || gameId.trim().length === 0) {
+      return {
+        success: false,
+        error: "Game ID cannot be empty",
+      };
+    }
+
+    // Construct URL differently for dev vs production
+    let url: string;
+    if (import.meta.env.DEV) {
+      url = `${BGG_API_BASE}/plays?username=${encodeURIComponent(username)}&id=${gameId}`;
+    } else {
+      const params = new URLSearchParams({
+        username,
+        id: gameId,
+      });
+      url = `${BGG_API_BASE}plays&${params.toString()}`;
+    }
+
+    const response = await fetchWithRetry(url);
+    const xmlText = await response.text();
+
+    // Check if still processing
+    if (isBggProcessing(xmlText)) {
+      return {
+        success: false,
+        error: "BGG API is still processing",
+        retryLater: true,
+        backoff: 2,
+      };
+    }
+
+    const json = parseXmlToJson(xmlText);
+
+    // The <plays> element is the root, so json itself is the plays object
+    const playsElement = json?.play ? json : json?.plays;
+
+    if (!playsElement || !playsElement.play) {
+      return {
+        success: true,
+        data: [],
+      };
+    }
+
+    const playsArray = Array.isArray(playsElement.play) ? playsElement.play : [playsElement.play].filter(Boolean);
+
+    const plays: PlayInfo[] = playsArray.map((play: any) => {
+      const gameId = play.item?.objectid || play.objectid;
+      return {
+        id: play.id,
+        gameId: gameId,
+        date: new Date(play.date),
+        quantity: parseInt(String(play.quantity || 1), 10),
+        length: play.length ? parseInt(String(play.length), 10) : undefined,
+        players: play.players?.player
+          ? (Array.isArray(play.players.player) ? play.players.player : [play.players.player]).map((p: any) => ({
+              username: p.username,
+              name: p.name,
+              score: p.score,
+              new: p.new === "1" || p.new === 1,
+              win: p.win === "1" || p.win === 1,
+            }))
+          : undefined,
+      };
+    });
+
+    return {
+      success: true,
+      data: plays,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch game plays",
+      retryLater: true,
+    };
+  }
+}
+
+/**
  * Get all pages of user's plays
  * Fetches all plays by paginating through results
  */

@@ -1,17 +1,45 @@
-import { useParams, Link } from "react-router-dom";
-import { useGameInfo } from "@/hooks/use-bgg-api";
+import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useGameInfo, useGamePlays } from "@/hooks/use-bgg-api";
 import { gameInfoToGame } from "@/lib/game-mapper";
 import { SimpleHeader } from "@/components/SimpleHeader";
 import { Footer } from "@/components/Footer";
 import { ArrowLeft, Star, Users, Clock, BarChart3, Trophy, Calendar, Hash, RefreshCw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useMemo } from "react";
 
 const GameDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { data: gameInfo, isLoading, error } = useGameInfo(id || "", !!id);
+  const [searchParams] = useSearchParams();
+  const bggUsername = searchParams.get('username') || localStorage.getItem('bgg-username') || '';
 
-  const game = gameInfo ? gameInfoToGame(gameInfo) : undefined;
+  const { data: gameInfo, isLoading, error } = useGameInfo(id || "", !!id);
+  const { data: plays } = useGamePlays(bggUsername, id || "", !!bggUsername && !!id);
+
+  // Merge game info with plays data
+  const game = useMemo(() => {
+    if (!gameInfo) return undefined;
+
+    const baseGame = gameInfoToGame(gameInfo);
+
+    if (!plays || plays.length === 0) {
+      return baseGame;
+    }
+
+    // Calculate total plays from quantity
+    const totalPlays = plays.reduce((sum, play) => sum + play.quantity, 0);
+
+    // Find most recent play date
+    const mostRecentPlay = plays.reduce((latest, play) => {
+      return play.date > latest ? play.date : latest;
+    }, new Date(0));
+
+    return {
+      ...baseGame,
+      numPlays: totalPlays,
+      lastPlayed: mostRecentPlay.getTime() > 0 ? mostRecentPlay : undefined,
+    };
+  }, [gameInfo, plays]);
 
   if (isLoading) {
     return (
@@ -66,15 +94,29 @@ const GameDetail = () => {
     return "Heavy";
   };
 
+  const formatDate = (date: Date | undefined) => {
+    if (!date) return "Never";
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+    return `${Math.floor(diffDays / 365)} years ago`;
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <SimpleHeader />
 
       <main className="container mx-auto px-4 py-8">
         {/* Back Button */}
-        <Link to="/collection" className="inline-flex items-center text-muted-foreground hover:text-primary transition-colors mb-6 text-sm">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Collection
+        <Link to="/collection" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 border-0 rounded-full shadow-none text-primary font-medium text-base hover:bg-secondary/80 transition-colors focus:ring-0 focus:ring-offset-0 mb-6">
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span className="text-sm">Back to Collection</span>
         </Link>
 
         <div className="grid lg:grid-cols-[400px_1fr] gap-8 animate-fade-in">
@@ -112,9 +154,9 @@ const GameDetail = () => {
                   <span className="font-semibold">{game.numPlays}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Last Modified</span>
+                  <span className="text-muted-foreground">Last Played</span>
                   <span className="font-semibold text-sm">
-                    {game.status.lastModified ? new Date(game.status.lastModified).toLocaleDateString() : "N/A"}
+                    {formatDate(game.lastPlayed)}
                   </span>
                 </div>
               </div>

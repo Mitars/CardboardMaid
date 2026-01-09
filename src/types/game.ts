@@ -68,4 +68,5 @@ export interface FilterState {
   minPlaytime: number | null;
   maxPlaytime: number | null;
   category: string | null;
+  searchQuery: string | null;
 }

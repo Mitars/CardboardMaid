@@ -3,9 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { GameCard } from "@/components/GameCard";
 import { FilterHeader } from "@/components/FilterHeader";
 import { Footer } from "@/components/Footer";
+import { GameModal } from "@/components/GameModal";
 import { FilterState, SortOption, SortDirection, Game } from "@/types/game";
 import { useUserCollection, useGamesInfo, useValidateUsername, useUserPlays } from "@/hooks/use-bgg-api";
 import { mapCollectionToGames, mergeGamesInfo, mergePlays } from "@/lib/game-mapper";
+import { pickWeightedRandomGame } from "@/lib/weighted-random";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 
@@ -91,9 +93,12 @@ const Collection = () => {
           minPlaytime: null,
           maxPlaytime: null,
           category: null,
+          searchQuery: null,
         };
   });
   const [sortBy, setSortBy] = useState<SortOption>(() => initialSortBy);
+  const [pickedGame, setPickedGame] = useState<Game | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Sort direction for directional sorts (defaults based on sort option)
   const [sortDirection, setSortDirection] = useState<SortDirection>(() => {
@@ -207,6 +212,35 @@ const Collection = () => {
     setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
   };
 
+  const handlePickRandom = () => {
+    if (filteredAndSortedGames.length === 0) return;
+
+    const game = pickWeightedRandomGame(filteredAndSortedGames);
+    setPickedGame(game);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const handlePickAnother = () => {
+    if (filteredAndSortedGames.length === 0) return;
+
+    // If there's only 1 game, we can't avoid picking it again
+    if (filteredAndSortedGames.length === 1) {
+      setPickedGame(filteredAndSortedGames[0]);
+      return;
+    }
+
+    // Filter out the current game so we don't pick it again
+    const availableGames = filteredAndSortedGames.filter(g => g.id !== pickedGame?.id);
+
+    // Pick from the filtered list
+    const game = pickWeightedRandomGame(availableGames);
+    setPickedGame(game);
+  };
+
   // Validate username from URL - always validate when URL username is present
   const { data: userInfo, error: validationError } = useValidateUsername(
     urlUsername || "",
@@ -294,6 +328,14 @@ const Collection = () => {
     if (filters.category) {
       gamesList = gamesList.filter((game) => {
         return game.categories?.includes(filters.category!);
+      });
+    }
+
+    // Filter by search query
+    if (filters.searchQuery) {
+      const query = filters.searchQuery.toLowerCase();
+      gamesList = gamesList.filter((game) => {
+        return game.name.toLowerCase().includes(query);
       });
     }
 
@@ -436,6 +478,7 @@ const Collection = () => {
             onSortDirectionToggle={handleSortDirectionToggle}
             totalGames={0}
             filteredCount={0}
+            onPickRandom={handlePickRandom}
           />
           <div className="flex items-center justify-center px-4" style={{ minHeight: 'calc(100vh - 180px)' }}>
             <div className="text-center max-w-md">
@@ -465,6 +508,7 @@ const Collection = () => {
           onSortDirectionToggle={handleSortDirectionToggle}
           totalGames={0}
           filteredCount={0}
+          onPickRandom={handlePickRandom}
         />
         <div className="flex items-center justify-center px-4" style={{ minHeight: 'calc(100vh - 180px)' }}>
           <div className="text-center max-w-md">
@@ -503,6 +547,7 @@ const Collection = () => {
         filteredCount={filteredAndSortedGames.length}
         availableCategories={availableCategories}
         onReshuffle={sortBy === "random" ? handleReshuffle : undefined}
+        onPickRandom={handlePickRandom}
       />
 
       <main className="w-full px-4 py-8">
@@ -532,6 +577,14 @@ const Collection = () => {
       </main>
 
       <Footer />
+
+      <GameModal
+        game={pickedGame}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onPickAnother={handlePickAnother}
+        bggUsername={username}
+      />
     </div>
   );
 };

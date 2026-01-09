@@ -10,6 +10,7 @@ import {
   getGamesInfo,
   getGameInfo,
   getAllUserPlays,
+  getGamePlays,
   type UserInfo,
   type CollectionGame,
   type GameInfo,
@@ -26,6 +27,7 @@ export const bggQueryKeys = {
   games: (gameIds: string[]) => ["bgg", "games", gameIds] as const,
   game: (gameId: string) => ["bgg", "game", gameId] as const,
   plays: (username: string) => ["bgg", "plays", username] as const,
+  gamePlays: (username: string, gameId: string) => ["bgg", "gamePlays", username, gameId] as const,
 };
 
 /**
@@ -223,6 +225,29 @@ export function useUserPlays(username: string, enabled: boolean = true) {
       return result.data;
     },
     enabled: enabled && username.length > 0,
+    retry: 2,
+    staleTime: 5 * 60 * 1000, // 5 minutes - plays can change frequently
+    gcTime: 30 * 60 * 1000, // 30 minutes
+  });
+}
+
+/**
+ * Hook to get plays for a specific game
+ * Returns all plays for the user and game combination
+ */
+export function useGamePlays(username: string, gameId: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: bggQueryKeys.gamePlays(username, gameId),
+    queryFn: async () => {
+      const result = await getGamePlays(username, gameId);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return result.data;
+    },
+    enabled: enabled && username.length > 0 && gameId.length > 0,
     retry: 2,
     staleTime: 5 * 60 * 1000, // 5 minutes - plays can change frequently
     gcTime: 30 * 60 * 1000, // 30 minutes
