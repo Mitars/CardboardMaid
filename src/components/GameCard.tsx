@@ -81,6 +81,7 @@ export function GameCard({ game, index, sortBy, onCategoryClick, selectedCategor
   return (
     <Link
       to={`/game/${game.id}`}
+      state={{ collectionGame: game }}
       className="group block"
       style={{ animationDelay: `${index * 40}ms` }}
     >

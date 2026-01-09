@@ -1,4 +1,4 @@
-import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useParams, Link, useSearchParams, useLocation } from "react-router-dom";
 import { useGameInfo, useGamePlays } from "@/hooks/use-bgg-api";
 import { gameInfoToGame } from "@/lib/game-mapper";
 import { SimpleHeader } from "@/components/SimpleHeader";
@@ -7,17 +7,47 @@ import { ArrowLeft, Star, Users, Clock, BarChart3, Trophy, Calendar, Hash, Refre
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
+import type { Game } from "@/types/game";
 
 const GameDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const bggUsername = searchParams.get('username') || localStorage.getItem('bgg-username') || '';
+
+  // Get collection game data passed via router state (for games with duplicate objectids)
+  const collectionGame = location.state?.collectionGame as Game | undefined;
 
   const { data: gameInfo, isLoading, error } = useGameInfo(id || "", !!id);
   const { data: plays } = useGamePlays(bggUsername, id || "", !!bggUsername && !!id);
 
-  // Merge game info with plays data
+  // Merge game info with collection data and plays data
   const game = useMemo(() => {
+    // If we have collection game data and it matches this ID, use it as the base
+    // This handles the case where multiple collection entries share the same BGG objectid
+    if (collectionGame && collectionGame.id === id) {
+      const baseGame = collectionGame;
+
+      if (!plays || plays.length === 0) {
+        return baseGame;
+      }
+
+      // Calculate total plays from quantity
+      const totalPlays = plays.reduce((sum, play) => sum + play.quantity, 0);
+
+      // Find most recent play date
+      const mostRecentPlay = plays.reduce((latest, play) => {
+        return play.date > latest ? play.date : latest;
+      }, new Date(0));
+
+      return {
+        ...baseGame,
+        numPlays: totalPlays,
+        lastPlayed: mostRecentPlay.getTime() > 0 ? mostRecentPlay : undefined,
+      };
+    }
+
+    // Fall back to BGG API data
     if (!gameInfo) return undefined;
 
     const baseGame = gameInfoToGame(gameInfo);
@@ -39,7 +69,7 @@ const GameDetail = () => {
       numPlays: totalPlays,
       lastPlayed: mostRecentPlay.getTime() > 0 ? mostRecentPlay : undefined,
     };
-  }, [gameInfo, plays]);
+  }, [gameInfo, plays, collectionGame, id]);
 
   if (isLoading) {
     return (

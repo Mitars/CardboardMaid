@@ -233,8 +233,9 @@ const Collection = () => {
       return;
     }
 
-    // Filter out the current game so we don't pick it again
-    const availableGames = filteredAndSortedGames.filter(g => g.id !== pickedGame?.id);
+    // Filter out the current game by collectionId so we don't pick it again
+    // (use collectionId instead of id because multiple collection entries can share the same game id)
+    const availableGames = filteredAndSortedGames.filter(g => g.collectionId !== pickedGame?.collectionId);
 
     // Pick from the filtered list
     const game = pickWeightedRandomGame(availableGames);
@@ -389,6 +390,10 @@ const Collection = () => {
       "random": (a, b) => {
         const aKey = randomSortKey.get(a.id) ?? 0;
         const bKey = randomSortKey.get(b.id) ?? 0;
+        // If games have the same random key (same objectid), sort by collectionId for consistency
+        if (aKey === bKey) {
+          return a.collectionId.localeCompare(b.collectionId);
+        }
         return aKey - bKey;
       },
     };
@@ -555,7 +560,7 @@ const Collection = () => {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
             {filteredAndSortedGames.map((game, index) => (
               <GameCard
-                key={game.id}
+                key={game.collectionId}
                 game={game}
                 index={index}
                 sortBy={sortBy}

@@ -120,7 +120,7 @@ export function GameModal({ game, isOpen, onClose, onPickAnother, bggUsername }:
           <button
             onClick={() => {
               onClose();
-              navigate(`/game/${game.id}`);
+              navigate(`/game/${game.id}`, { state: { collectionGame: game } });
             }}
             className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl font-medium transition-colors"
           >
