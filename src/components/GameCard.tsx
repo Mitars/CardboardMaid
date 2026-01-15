@@ -85,7 +85,7 @@ export function GameCard({ game, index, sortBy, onCategoryClick, selectedCategor
       className="group block"
       style={{ animationDelay: `${index * 40}ms` }}
     >
-      <article className="relative bg-card rounded-sm overflow-hidden border-[3px] border-[transparent] shadow-card hover:shadow-card-hover hover:border-primary/90 transition-all duration-300 animate-slide-up aspect-square">
+      <article className="relative bg-card rounded-sm overflow-hidden border-[3px] border-[transparent] shadow-card hover:shadow-card-hover hover:border-primary/90 transition-all duration-300 animate-slide-up aspect-[2/1] sm:aspect-[4/3] lg:aspect-square">
         {/* Image Container - Full height */}
         <div className="absolute inset-0 overflow-hidden bg-secondary">
           <img

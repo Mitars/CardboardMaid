@@ -557,7 +557,7 @@ const Collection = () => {
 
       <main className="w-full px-4 py-8">
         {filteredAndSortedGames.length > 0 ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
             {filteredAndSortedGames.map((game, index) => (
               <GameCard
                 key={game.collectionId}

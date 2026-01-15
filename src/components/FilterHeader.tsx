@@ -1,7 +1,8 @@
 import { FilterState, SortOption, SortDirection } from "@/types/game";
-import { X, Filter, Shuffle, ArrowUp, ArrowDown, Dice6, Search } from "lucide-react";
+import { X, Filter, Shuffle, ArrowUp, ArrowDown, Dice6, Search, Moon, Sun } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import {
   Select,
   SelectContent,
@@ -77,6 +78,7 @@ export function FilterHeader({
   onPickRandom,
 }: FilterHeaderProps) {
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.searchQuery || "");
 
@@ -265,7 +267,7 @@ export function FilterHeader({
 
             {/* Mobile Filter Button & Theme Toggle */}
             <div className="flex-1 md:hidden flex items-center gap-2">
-              <div className="flex-1 flex items-center justify-center gap-2">
+              <div className="flex-1 flex items-center justify-center gap-2 flex-wrap">
                 <button
                   onClick={() => {
                     if (sortBy !== 'random') {
@@ -275,10 +277,10 @@ export function FilterHeader({
                       onReshuffle();
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+                  className="hidden shuffle-btn flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
                 >
                   <Shuffle className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">Shuffle Games</span>
+                  <span className="text-xs font-medium">Shuffle</span>
                 </button>
                 {onPickRandom && filteredCount > 0 && (
                   <button
@@ -286,7 +288,7 @@ export function FilterHeader({
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
                   >
                     <Dice6 className="w-3.5 h-3.5" />
-                    <span className="text-xs font-medium">Pick Random</span>
+                    <span className="text-xs font-medium">Random</span>
                   </button>
                 )}
               </div>
@@ -302,7 +304,9 @@ export function FilterHeader({
                   <span className="font-semibold text-foreground">{filteredCount}</span>
                   {filteredCount !== totalGames && <span>/{totalGames}</span>} games
                 </div>
-                <ThemeToggle />
+                <div className="theme-toggle-wrapper">
+                  <ThemeToggle />
+                </div>
               </div>
             </div>
 
@@ -513,6 +517,23 @@ export function FilterHeader({
                   Showing <span className="font-semibold text-foreground">{filteredCount}</span>
                   {filteredCount !== totalGames && <span> of {totalGames}</span>} games
                 </p>
+              </div>
+
+              {/* Theme Toggle - Always visible at bottom */}
+              <div className="pt-4 border-t border-border">
+                <h3 className="text-lg font-semibold mb-3">Appearance</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted border border-border rounded-lg text-sm transition-colors"
+                  >
+                    <span className="relative w-4 h-4 inline-block">
+                      <Sun className="w-4 h-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 absolute" />
+                      <Moon className="w-4 h-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 absolute" />
+                    </span>
+                    <span>Toggle Theme</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
